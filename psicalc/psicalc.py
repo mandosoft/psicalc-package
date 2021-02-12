@@ -125,6 +125,7 @@ def read_txt_file_format(file) -> pd.DataFrame:
     df = df.replace({'.': '-'})
     df.index.name = 'SEQUENCE_ID'
     df = check_for_duplicates(df)
+    df.fillna('?', inplace=True)
 
     return df
 
@@ -135,6 +136,9 @@ def read_csv_file_format(file) -> pd.DataFrame:
     df = df.rename(columns={df.columns[0]: 'SEQUENCE_ID'})
     df = df.set_index('SEQUENCE_ID', drop=True)
     df = check_for_duplicates(df)
+    df.fillna('?', inplace=True)
+    if df.index[0] == "Domain: Data":
+        df.drop(index=["Domain: Data"], inplace=True)
     df.columns = range(len(df.columns))
 
     return df
