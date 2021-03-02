@@ -28,7 +28,7 @@ import csv
 import pandas as pd
 import numpy as np
 from itertools import combinations
-from sklearn.metrics.cluster import normalized_mutual_info_score as nmis
+from .nmi import normalized_mutual_info_score as nmis
 
 
 def select_subset(c_list: list, s: int):
@@ -306,7 +306,6 @@ def remove_high_insertion_sites(df: pd.DataFrame, value: int) -> pd.DataFrame:
 
     Provide percentage value to remove as a whole number, i.e. 15 % == 15
     """
-
     df.replace({'[-#?.]': None}, regex=True, inplace=True)
     index_len = len(df.index)
     null_val = float(value) / 100
