@@ -53,13 +53,14 @@ def contingency_matrix(labels_true, labels_pred, *, eps=None, sparse=False,
                        dtype=np.int64):
     if eps is not None and sparse:
         raise ValueError("Cannot set 'eps' when sparse=True")
-    gaps = False
+    class_gaps, cluster_gaps, both = False, False, False
     classes, class_idx = np.unique(labels_true, return_inverse=True)
     clusters, cluster_idx = np.unique(labels_pred, return_inverse=True)
     n_classes = classes.shape[0]
     n_clusters = clusters.shape[0]
-    if classes[0] == 0 or clusters[0] == 0:
-        gaps = True
+    if classes[0] == 0 : class_gaps = True
+    if clusters[0] == 0 : cluster_gaps = True
+    if class_gaps and cluster_gaps : both = True
     # Using coo_matrix to accelerate simple histogram calculation,
     # i.e. bins are consecutive integers
     # Currently, coo_matrix is faster than histogram2d for simple cases
@@ -67,36 +68,36 @@ def contingency_matrix(labels_true, labels_pred, *, eps=None, sparse=False,
                                  (class_idx, cluster_idx)),
                                 shape=(n_classes, n_clusters),
                                 dtype=dtype)
-    print("\nLabels True: \n", labels_true)
-    print("\nLabels Pred: \n", labels_pred)
-    print("\nUnique Labels True: \n", classes)
-    print("\nUnique Labels Pred: \n", clusters)
-    print("\nInverse Labels True: \n", class_idx)
-    print("\nInverse Labels Pred: \n", cluster_idx)
-    print("\nMxN: \n", n_classes, n_clusters)
-    print("\nContingency Array: \n", contingency.toarray())
     if sparse:
         contingency = contingency.tocsr()
         contingency.sum_duplicates()
-        if gaps:
-            fix_gaps(contingency)
+        if class_gaps or cluster_gaps:
+            fix_gaps(contingency, class_gaps, cluster_gaps, both)
     else:
         contingency = contingency.toarray()
         if eps is not None:
             # don't use += as contingency is integer
             contingency = contingency + eps
+
     return contingency
 
 
-def fix_gaps(contingency):
+def fix_gaps(contingency, class_gaps, cluster_gaps, both):
     """Modifies the contingency matrix to discount MSA gaps as data"""
     a, b = contingency.nonzero()
-    coords = np.array([[i, j] for i, j in zip(a, b)
-                       if i == 0 or j == 0])
+    if both:
+        coords = np.array([[i, j] for i, j in zip(a, b)
+                           if i == 0 or j == 0])
+    elif class_gaps and not cluster_gaps:
+        coords = np.array([[i, j] for i, j in zip(a, b)
+                           if i == 0])
+    else:
+        coords = np.array([[i, j] for i, j in zip(a, b)
+                           if j == 0])
     for m, n in coords:
         contingency[m, n] = 0
-    print(contingency.toarray())
-    exit()
+
+    return contingency
 
 
 @_deprecate_positional_args
@@ -109,7 +110,6 @@ def mutual_info_score(labels_true, labels_pred, *, contingency=None):
         contingency = check_array(contingency,
                                   accept_sparse=['csr', 'csc', 'coo'],
                                   dtype=[int, np.int32, np.int64])
-
     if isinstance(contingency, np.ndarray):
         # For an array
         nzx, nzy = np.nonzero(contingency)
@@ -140,7 +140,9 @@ def mutual_info_score(labels_true, labels_pred, *, contingency=None):
 def entropy(labels):
     if len(labels) == 0:
         return 1.0
-    label_idx = np.unique(labels, return_inverse=True)[1]
+    labels, label_idx = np.unique(labels, return_inverse=True)
+    if labels[0] == 0:
+        label_idx = label_idx[label_idx != 0]
     pi = np.bincount(label_idx).astype(np.float64)
     pi = pi[pi > 0]
     pi_sum = np.sum(pi)
