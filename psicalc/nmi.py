@@ -140,9 +140,14 @@ def mutual_info_score(labels_true, labels_pred, *, contingency=None):
                          type(contingency))
 
     contingency_sum = contingency.sum()
+    if contingency_sum == 0:
+        return 0.0
+    # taking the log(0) with cause a domain error since it is mathematically undefined
+    # this case occurs when there are zero useful observations of data
     pi = np.ravel(contingency.sum(axis=1))
     pj = np.ravel(contingency.sum(axis=0))
     log_contingency_nm = np.log(nz_val)
+
     contingency_nm = nz_val / contingency_sum
     # Don't need to calculate the full outer product, just for non-zeroes
     outer = (pi.take(nzx).astype(np.int64, copy=False)
