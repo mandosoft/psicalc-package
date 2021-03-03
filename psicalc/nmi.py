@@ -158,8 +158,8 @@ def mutual_info_score(labels_true, labels_pred, *, contingency=None):
 def entropy(labels):
     if len(labels) == 0:
         return 1.0
-    labels, label_idx = np.unique(labels, return_inverse=True)
-    if labels[0] == 0:
+    labels_u, label_idx = np.unique(labels, return_inverse=True)
+    if labels_u[0] == 0:
         label_idx = label_idx[label_idx != 0]
     pi = np.bincount(label_idx).astype(np.float64)
     pi = pi[pi > 0]
