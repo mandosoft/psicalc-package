@@ -1,4 +1,22 @@
-#Add BSD 3 Clause Here
+# This work is a modification of the scikit learn supervised clustering package.
+# Licensed under the BSD 3-Clause License.
+#
+# Copyright (c) 2007-2020 The scikit-learn developers.
+# Authors: Olivier Grisel <olivier.grisel@ensta.org>
+#          Wei LI <kuantkid@gmail.com>
+#          Diego Molla <dmolla-aliod@gmail.com>
+#          Arnaud Fouchet <foucheta@gmail.com>
+#          Thierry Guillemot <thierry.guillemot.work@gmail.com>
+#          Gregory Stupp <stuppie@gmail.com>
+#          Joel Nothman <joel.nothman@gmail.com>
+#          Arya McCarthy <arya@jhu.edu>
+#          Uwe F Mayer <uwe_f_mayer@yahoo.com>
+#
+# Modified by: Thomas Townsley <thomas@mandosoft.dev> J
+#              Joe Deweese, PhD. <joe.deweese@lipscomb.edu>
+#              Kirk Durston, PhD. <kirkdurston@gmail.com>
+#              Timothy Wallace, PhD. <tlwallace@lipscomb.edu>
+#              Salvador Cordova, PhD. <salvador.idcs@gmail.com>
 
 import numpy as np
 import warnings
