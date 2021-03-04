@@ -168,7 +168,10 @@ def entropy(labels):
         label_idx = label_idx[label_idx != 0]
     pi = np.bincount(label_idx).astype(np.float64)
     pi = pi[pi > 0]
+    if pi.size == 0:
+        return 0.0
     pi_sum = np.sum(pi)
+
     # log(a / b) should be calculated as log(a) - log(b) for
     # possible loss of precision
     return -np.sum((pi / pi_sum) * (np.log(pi) - log(pi_sum)))
