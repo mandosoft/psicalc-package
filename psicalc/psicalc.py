@@ -342,7 +342,7 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
 
     print("\nLooking for strong pairwise clusters...")
     for item, each in enumerate(subset_list):
-        max_rii, best_cluster = 0, None
+        max_rii, best_cluster = 0.0, None
         for location, cluster in enumerate(msa_index):
             cluster_mode = msa_map.get(cluster)
             subset_mode = msa_map.get(each[0])
@@ -399,9 +399,9 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
         while i < num_clusters:
             location = None
             cluster_mode = msa_map.get(C[i][1][0])
-            max_rii, best_cluster = 0, None
+            max_rii, best_cluster = 0.0, None
             for loc, entry in enumerate(C):
-                sr_mode, cluster = entry
+                cluster = entry[1]
                 attr_mode = msa_map.get(cluster[0])
                 if cluster_mode != attr_mode:
                     rii = nmis(num_msa[:, attr_mode], num_msa[:, cluster_mode], average_method='geometric')

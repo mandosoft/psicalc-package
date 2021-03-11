@@ -204,7 +204,10 @@ def normalized_mutual_info_score(labels_true, labels_pred, *,
     # This is a perfect match hence return 1.0.
     if (classes.shape[0] == clusters.shape[0] == 1 or
             classes.shape[0] == clusters.shape[0] == 0):
-        return 1.0
+        if classes[0] == 0 or clusters[0] == 0:
+            return 0.0
+        else:
+            return 1.0
 
     contingency = contingency_matrix(labels_true, labels_pred, sparse=True)
     contingency = contingency.astype(np.float64,
