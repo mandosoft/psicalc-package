@@ -388,18 +388,18 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
     R = len(C)
     for remaining in msa_index:
         C.append([0, [remaining]])
-
-    # Stage Two: Move through the pairs in the list and find their best attribute
-    k = len(C)
     num_clusters = len(C[0:R])
 
+    # Stage Two: Move through the pairs in the list and find their best attribute
     while len(C) >= 1:
-        print("\nNumber of Clusters Remaining: ", num_clusters)
+        print(" --> Total Remaining ", len(C))
+
         i = 0
         while i < num_clusters:
             location = None
             cluster_mode = msa_map.get(C[i][1][0])
             max_rii, best_cluster = 0.0, None
+
             for loc, entry in enumerate(C):
                 cluster = entry[1]
                 attr_mode = msa_map.get(cluster[0])
@@ -407,20 +407,23 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
                     rii = nmis(num_msa[:, attr_mode], num_msa[:, cluster_mode], average_method='geometric')
                     if rii > max_rii:
                         max_rii, best_cluster, location = rii, cluster, loc
-            C[i][1] = C[i][1] + best_cluster
-            C[i][0], C[i][1] = return_sr_mode(num_msa, msa_map, C[i][1], csv_dict, 0, k)
-            C.pop(location)
-            i += 1
-            k -= 1
-            print("k = ", k)
-            if len(C) == 1:
-                break
-            if location <= num_clusters:
-                num_clusters -= 1
+
+            if best_cluster is None:
+                i += 1
+            else:
+                C[i][1] = C[i][1] + best_cluster
+                C[i][0], C[i][1] = return_sr_mode(num_msa, msa_map, C[i][1], csv_dict, [], len(C))
+                C.pop(location)
+                i += 1
+                print("clusters: ", num_clusters,
+                      " single attributes: ", (len(C) - num_clusters))
+                if len(C) == 1:
+                    break
+                if location <= num_clusters:
+                    num_clusters -= 1
 
         # Re-sort the list
         C = sorted(C, key=lambda x: x[0], reverse=True)
-        print(" --> Next run at ", len(C))
 
         if num_clusters <= 1:
             break
