@@ -389,6 +389,7 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
     for remaining in msa_index:
         C.append([0, [remaining]])
     num_clusters = len(C[0:R])
+    cluster_halt = 0
 
     # Stage Two: Move through the pairs in the list and find their best attribute
     while len(C) >= 1:
@@ -410,7 +411,9 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
 
             if best_cluster is None:
                 i += 1
+                cluster_halt += 1
             else:
+                cluster_halt = 0
                 C[i][1] = C[i][1] + best_cluster
                 C[i][0], C[i][1] = return_sr_mode(num_msa, msa_map, C[i][1], csv_dict, [], len(C))
                 C.pop(location)
@@ -425,7 +428,7 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
         # Re-sort the list
         C = sorted(C, key=lambda x: x[0], reverse=True)
 
-        if num_clusters <= 1:
+        if num_clusters <= 1 or cluster_halt == num_clusters:
             break
 
     print("\n\n--- took " + str(time.time() - start_time) + " seconds ---")
