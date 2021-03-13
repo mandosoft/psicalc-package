@@ -115,7 +115,7 @@ def read_txt_file_format(file) -> pd.DataFrame:
 
     vals = string_without_line_breaks.split('>')
     for line in vals:
-        line = re.split('(\w+/\d*-?\d*)', line)
+        line = re.split('([\w\|]+/\d*-?\d*)', line)
         line.remove('')
         for i in enumerate(line):
             g = list(line[1])
@@ -350,10 +350,14 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
                 rii = nmis(num_msa[:, subset_mode], num_msa[:, cluster_mode], average_method='geometric')
                 if rii > max_rii:
                     max_rii, best_cluster = rii, location
-        subset_list[item].append(msa_index[best_cluster])
-        print("pair located: ", subset_list[item])
+        if best_cluster is None:
+            continue
+        else:
+            subset_list[item].append(msa_index[best_cluster])
+            print("pair located: ", subset_list[item])
+    pair_list = [x for x in subset_list if len(x) > 1]
 
-    for cluster in subset_list:
+    for cluster in pair_list:
         return_sr_mode(num_msa, msa_map, cluster, csv_dict, hash_list, k)
 
     sorted_list = sorted(hash_list, key=lambda x: x[0], reverse=True)
@@ -393,7 +397,7 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
 
     # Stage Two: Move through the pairs in the list and find their best attribute
     while len(C) >= 1:
-        print(" --> Total Remaining ", len(C))
+        print("\n --> Total Remaining ", len(C))
 
         i = 0
         while i < num_clusters:
