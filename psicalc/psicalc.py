@@ -137,6 +137,7 @@ def read_csv_file_format(file) -> pd.DataFrame:
     df = df.set_index('SEQUENCE_ID', drop=True)
     df = check_for_duplicates(df)
     df.fillna('?', inplace=True)
+
     if df.index[0] == "Domain: Data":
         df.drop(index=["Domain: Data"], inplace=True)
     df.columns = range(len(df.columns))
@@ -144,7 +145,7 @@ def read_csv_file_format(file) -> pd.DataFrame:
     return df
 
 
-def return_sr_mode(msa: np.ndarray, m_map: dict, c: list, csv_dict: dict, list_store: list, k) -> tuple:
+def return_sr_mode(msa: np.ndarray, m_map: dict, c: list, c_dict: dict, list_store: list, k) -> tuple:
     """Calculates the sr_mode and new mode of a cluster and returns both."""
     cc = len(list(combinations(c, 2)))
     if len(c) < 2:
@@ -187,7 +188,7 @@ def return_sr_mode(msa: np.ndarray, m_map: dict, c: list, csv_dict: dict, list_s
     if k == "pairwise" or k == "post-agg":
         list_store.append([sr_mode, new_mode])
     if k != "pairwise":
-        csv_dict[tuple(sorted(tuple(c)))] = [round(sr_mode, 6), k]
+        c_dict[tuple(sorted(tuple(c)))] = [round(sr_mode, 6), k]
 
     return sr_mode, new_mode
 
@@ -229,16 +230,17 @@ def aggregate(agg: list) -> list:
     return agg
 
 
-def write_output_data(spread: int, csv_dict: dict):
+def write_output_data(spread: int, c_dict: dict):
     """Writes the CSV output file"""
     filename = "data_out_width" + str(spread) + ".csv"
     a_file = open(filename, "w")
     writer = csv.writer(a_file)
     writer.writerow(["Cluster", "Sr_mode", "Discovered"])
-    for key, value in csv_dict.items():
+    for key, value in c_dict.items():
         val1, val2 = value
         writer.writerow([key, val1, val2])
     a_file.close()
+
     return filename
 
 
@@ -325,13 +327,22 @@ def remove_high_insertion_sites(df: pd.DataFrame, value: int) -> pd.DataFrame:
     return df
 
 
+def return_dict_state() -> dict:
+    """Useful for returning the values of the global cluster dictionary
+    at an intermediate stage. For example, a user may want to end a long
+    running process and grab the available data prior to exit."""
+
+    return csv_dict
+
+
 def find_clusters(spread: int, df: pd.DataFrame) -> dict:
     """Discovers cluster sites with high shared normalized mutual information.
     Provide a dataframe and a sample spread-width. Returns a dictionary."""
     print("\nEncoding MSA. This may take a while.")
-    k = "pairwise"
 
+    global csv_dict
     csv_dict = dict()
+    k = "pairwise"
     start_time = time.time()
     hash_list = list()
     msa_index = df.columns.tolist()
