@@ -153,7 +153,7 @@ def return_sr_mode(msa: np.ndarray, m_map: dict, c: list, c_dict: dict, list_sto
         return sr_mode, new_mode
     elif len(c) == 2:
         i, j = m_map.get(c[0]), m_map.get(c[1])
-        max_sum = nmis(msa[:, i], msa[:, j])
+        max_sum = nmis(msa[:, i], msa[:, j], average_method='geometric')
         new_mode = c
         """
         if max_sum > 1.0:
@@ -169,7 +169,7 @@ def return_sr_mode(msa: np.ndarray, m_map: dict, c: list, c_dict: dict, list_sto
             for location, j in enumerate(c):
                 if location != loc and location > shift:
                     l, r = m_map.get(i), m_map.get(j)
-                    A[loc][1].append(nmis(msa[:, l], msa[:, r]))
+                    A[loc][1].append(nmis(msa[:, l], msa[:, r], average_method='geometric'))
             t = loc
             q = loc + 1
             if q != D:
@@ -370,7 +370,7 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
             cluster_mode = msa_map.get(cluster)
             subset_mode = msa_map.get(each[0])
             if subset_mode != cluster_mode:
-                rii = nmis(num_msa[:, subset_mode], num_msa[:, cluster_mode])
+                rii = nmis(num_msa[:, subset_mode], num_msa[:, cluster_mode], average_method='geometric')
                 if rii > max_rii:
                     max_rii, best_cluster = rii, location
         if best_cluster is None:
@@ -419,47 +419,53 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
     cluster_halt = 0
 
     # Stage Two: Move through the pairs in the list and find their best attribute
-    while len(C) >= 1:
+    try:
+        while len(C) >= 1:
 
-        if signal_halt(): break
-        print("\n --> Total Remaining ", len(C))
-
-        i = 0
-        while i < num_clusters:
             if signal_halt(): break
-            location = None
-            cluster_mode = msa_map.get(C[i][1][0])
-            max_rii, best_cluster = 0.0, None
+            print("\n --> Total Remaining ", len(C))
 
-            for loc, entry in enumerate(C):
-                cluster = entry[1]
-                attr_mode = msa_map.get(cluster[0])
-                if cluster_mode != attr_mode:
-                    rii = nmis(num_msa[:, attr_mode], num_msa[:, cluster_mode])
-                    if rii > max_rii:
-                        max_rii, best_cluster, location = rii, cluster, loc
+            i = 0
+            while i < num_clusters:
 
-            if best_cluster is None:
-                i += 1
-                cluster_halt += 1
-            else:
-                cluster_halt = 0
-                C[i][1] = C[i][1] + best_cluster
-                C[i][0], C[i][1] = return_sr_mode(num_msa, msa_map, C[i][1], csv_dict, [], len(C))
-                C.pop(location)
-                i += 1
-                print("clusters: ", num_clusters,
-                      " single attributes: ", (len(C) - num_clusters))
-                if len(C) == 1:
-                    break
-                if location <= num_clusters:
-                    num_clusters -= 1
+                if signal_halt(): break
+                location = None
+                cluster_mode = msa_map.get(C[i][1][0])
+                max_rii, best_cluster = 0.0, None
 
-        # Re-sort the list
-        C = sorted(C, key=lambda x: x[0], reverse=True)
+                for loc, entry in enumerate(C):
+                    cluster = entry[1]
+                    attr_mode = msa_map.get(cluster[0])
+                    if cluster_mode != attr_mode:
+                        rii = nmis(num_msa[:, attr_mode], num_msa[:, cluster_mode], average_method='geometric')
+                        if rii > max_rii:
+                            max_rii, best_cluster, location = rii, cluster, loc
 
-        if num_clusters <= 1 or cluster_halt == num_clusters:
-            break
+                if best_cluster is None:
+                    i += 1
+                    cluster_halt += 1
+
+                else:
+                    cluster_halt = 0
+                    C[i][1] = C[i][1] + best_cluster
+                    C[i][0], C[i][1] = return_sr_mode(num_msa, msa_map, C[i][1], csv_dict, [], len(C))
+                    C.pop(location)
+                    i += 1
+                    print("clusters: ", num_clusters,
+                          " single attributes: ", (len(C) - num_clusters))
+                    if len(C) == 1:
+                        break
+                    if location <= num_clusters:
+                        num_clusters -= 1
+
+            # Re-sort the list
+            C = sorted(C, key=lambda x: x[0], reverse=True)
+
+            if num_clusters <= 1 or cluster_halt >= num_clusters:
+                break
+
+    except KeyboardInterrupt:
+        return_dict_state()
 
     print("\n\n--- took " + str(time.time() - start_time) + " seconds ---")
     halt = False
