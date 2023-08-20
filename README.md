@@ -13,9 +13,10 @@ data = pc.read_txt_file_format(file) # read Fasta file
 
 data = pc.durston_schema(data, 1) # Label column index starting at 1
 
-result = pc.find_clusters(7, data) # will sample every 7th column
+result = pc.find_clusters(1, data) # will sample every column against msa
 
-pc.write_output_data(7, result)
+# Optionally write dictionary to csv
+pc.write_output_data(1, result)
 ```
 
 The program will run and return a csv file with the strongest clusters found in the MSA provided.

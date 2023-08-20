@@ -27,8 +27,9 @@ import time
 import csv
 import pandas as pd
 import numpy as np
-from itertools import combinations
+from itertools import combinations, filterfalse
 from .nmi import normalized_mutual_info_score as nmis
+from .nmi import entropy
 
 
 def select_subset(c_list: list, s: int):
@@ -47,6 +48,7 @@ def durston_schema(df: pd.DataFrame, value: int) -> pd.DataFrame:
     return df
 
 
+# noinspection PyUnresolvedReferences
 def deweese_schema(df: pd.DataFrame, pattern='^-') -> pd.DataFrame:
     """Labels data based on the range on the first row of the MSA.
     For example, if the first row is labelled TOP2 YEAST/59-205, then all
@@ -59,6 +61,8 @@ def deweese_schema(df: pd.DataFrame, pattern='^-') -> pd.DataFrame:
         first_row_ix = df.index[0]
         if '(' in first_row_ix:
             ix_label = first_row_ix.rsplit('(', 1)
+        elif ':' in first_row_ix:
+            ix_label = first_row_ix.rsplit(':', 1)
         else:
             ix_label = first_row_ix.rsplit('/', 1)
         ix_label = ix_label[1]
@@ -105,21 +109,16 @@ def check_for_duplicates(df: pd.DataFrame) -> pd.DataFrame:
 
 def read_txt_file_format(file) -> pd.DataFrame:
     """Reads FASTA files or text file-based MSAs into a dataframe."""
-    nucs_dict = dict()
-    with open(file, "r") as a_file:
-        string_without_line_breaks = ""
-        for line in a_file:
-            stripped_line = line.rstrip()
-            string_without_line_breaks += stripped_line
-        a_file.close()
-
-    vals = string_without_line_breaks.split('>')
-    for line in vals:
-        line = re.split('([\w\|]+/\d*-?\d*)', line)
-        line.remove('')
-        for i in enumerate(line):
-            g = list(line[1])
-            nucs_dict.update({line[0]: g})
+    id, seq = [], []
+    with open(file, "r") as fasta_file:
+        for line in fasta_file:
+            if line.startswith(">"):
+                id.append(line.strip("\n").strip(">"))
+            elif line:
+                seq.append([*line.strip("\n")])
+        res = list(zip(id, seq))
+        fasta_file.close()
+    nucs_dict = dict(res)
 
     df = pd.DataFrame.from_dict(nucs_dict, orient='index')
     df = df.replace({'.': '-'})
@@ -185,9 +184,10 @@ def return_sr_mode(msa: np.ndarray, m_map: dict, c: list, c_dict: dict, list_sto
         new_mode = return_new_mode(mode_loc, c)
 
     sr_mode = max_sum / cc
-    if k == "pairwise" or k == "post-agg":
+    if k == "pairwise" or k == "top-pairwise":
         list_store.append([sr_mode, new_mode])
-    if k != "pairwise":
+
+    if k != "pairwise" or k == "pairwise_only":
         c_dict[tuple(sorted(tuple(c)))] = [round(sr_mode, 6), k]
 
     return sr_mode, new_mode
@@ -203,31 +203,38 @@ def return_new_mode(location: int, c: list) -> list:
     return c
 
 
-def aggregate(agg: list) -> list:
-    """Finds clusters with overlapping attributes and consolidates them inplace."""
+def check_intersections(agg: list) -> list:
+    """Finds clusters with overlapping attributes and takes the one
+    with the highest sr_mode value."""
     idx = 0
     while idx < len(agg):
         iex = 0
+
         while iex < len(agg):
-            set1, set2 = set(agg[idx]), set(agg[iex])
+
+            set1_sr_mode, set2_sr_mode = agg[idx][0], agg[iex][0]
+            set1, set2 = set(agg[idx][1]), set(agg[iex][1])
 
             # check for intersections
             if set1 != set2 and set1.intersection(set2):
-                agg[idx] = list(set1.union(set2))
-                del agg[iex]
-                iex -= 1
-
-            # check for permutations
-            elif set1 == set2:
-                if agg[idx][0] != agg[iex][0]:
+                if set1_sr_mode > set2_sr_mode:
                     del agg[iex]
                     iex -= 1
+                else:
+                    del agg[idx]
+                    idx -= 1
+                    break
+
+            # check for permutations
+            elif set1 == set2 and agg[idx][1][0] != agg[iex][1][0]:
+                del agg[iex]
+                iex -= 1
             else:
-                pass
-            iex += 1
+                iex += 1
+
         idx += 1
 
-    return agg
+    return [j for x, j in agg]
 
 
 def write_output_data(spread: int, c_dict: dict):
@@ -346,20 +353,61 @@ def signal_halt() -> bool:
     return halt
 
 
-def find_clusters(spread: int, df: pd.DataFrame) -> dict:
-    """Discovers cluster sites with high shared normalized mutual information.
-    Provide a dataframe and a sample spread-width. Returns a dictionary."""
+def calculate_time(start):
+    """Calculate time taken for program execution."""
+    print("\n\n--- took " + str(round((time.time() - start), 3)) + " seconds ---")
+
+    return
+
+
+def find_clusters(spread: int, df: pd.DataFrame, k="pairwise", e=0.0) -> dict:
+    """
+    Discovers cluster sites with high shared normalized mutual information.
+    Provide a dataframe and a sample spread-width. Returns a dictionary.
+
+    The variable k by default is set to 'pairwise' to look for pairwise clusters
+    and aggregate them prior to running Phase 2. Users may also set k to 'pairwise_only'
+    if they only want to output pairwise clusters without aggregating them, in which
+    case the program will halt once all pairwise clusters are found. This may be useful
+    when comparing to methods like DCA.
+
+    By default "e" or entropy is set to 0 but may be adjusted to exclude low entropy sites from
+    being run in the program.
+    """
+
     print("\nEncoding MSA. This may take a while.")
 
     global halt
     halt = False
     csv_dict = dict()
-    k = "pairwise"
     start_time = time.time()
     hash_list = list()
-    msa_index = df.columns.tolist()
+
+    msa_col_list = df.columns.tolist()
+    num_msx = encode_msa(df)
+    num_columns = num_msx.shape[1]
+    encoded_col_list = list(range(num_columns))
+    mapping = dict(zip(msa_col_list, encoded_col_list))
+
+    # Calculate entropy for each column and filter
+    low_entropy_columns = [col_index for col_index in range(num_columns)
+                           if entropy(num_msx[:, col_index]) < e]
+
+    # What will be returned in the data output
+    low_entropy_results = [col_name for col_name in msa_col_list
+                           if mapping[col_name] in low_entropy_columns]
+
+    csv_dict["low_entropy_sites"] = low_entropy_results
+
+    # Create a new msa_index list without values corresponding to low entropy columns
+    msa_index = [col_name for col_name in msa_col_list
+                 if mapping[col_name] not in low_entropy_columns]
+
+    # Create a new matrix without the low entropy regions
+    num_msa = np.delete(num_msx, low_entropy_columns, axis=1)
+
+    print("\nNumber of low entropy regions excluded: ", len(low_entropy_results))
     msa_map = {k: v for v, k in enumerate(msa_index)}
-    num_msa = encode_msa(df)
     subset = select_subset(msa_index, spread)
     subset_list = [[z] for z in subset]
 
@@ -369,6 +417,7 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
         for location, cluster in enumerate(msa_index):
             cluster_mode = msa_map.get(cluster)
             subset_mode = msa_map.get(each[0])
+
             if subset_mode != cluster_mode:
                 rii = nmis(num_msa[:, subset_mode], num_msa[:, cluster_mode], average_method='geometric')
                 if rii > max_rii:
@@ -378,19 +427,27 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
         else:
             subset_list[item].append(msa_index[best_cluster])
             print("pair located: ", subset_list[item])
+
     pair_list = [x for x in subset_list if len(x) > 1]
 
     for cluster in pair_list:
         return_sr_mode(num_msa, msa_map, cluster, csv_dict, hash_list, k)
 
+    # Sort list by Sr_Mode and generate sorted list of labels
+    # May also return pairwise data if no strong sites are found
     sorted_list = sorted(hash_list, key=lambda x: x[0], reverse=True)
     out_list = [x for x in sorted_list if x[0] >= 0.10]
-    dataframe_label_list = [j for x, j in out_list]
 
-    # Check for repeat attributes between pairwise clusters
-    final_df_set = aggregate(dataframe_label_list)
+    # Used only when user selects to obtain pairwise clusters only
+    if k == "pairwise_only" or len(out_list) == 0:
+        calculate_time(start_time)
+        return csv_dict
+
+    # Check for attribute intersections between pairwise clusters
+    final_df_set = check_intersections(out_list)
+
     unranked = list()
-    k = "post-agg"  # means clusters which made it through post-aggregation
+    k = "top-pairwise"
     for cluster in final_df_set:
         return_sr_mode(num_msa, msa_map, cluster, csv_dict, unranked, k)
 
@@ -402,8 +459,12 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
                 msa_index.remove(col)
             except ValueError:
                 print("\nFAILED: Tried to remove site location ", col, "but it was not found.\n"
-                       "This is likely due to duplicates not being removed during aggregation.")
+                       "This is likely due to duplicates not being removed during check_intersections().")
                 sys.exit()
+
+    if len(msa_index) == 0:
+        calculate_time(start_time)
+        return csv_dict
 
     print("\nTop ranked clusters:")
     num = 0
@@ -418,7 +479,8 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
     num_clusters = len(C[0:R])
     cluster_halt = 0
 
-    # Stage Two: Move through the pairs in the list and find their best attribute
+    # Stage Two: Move through the pairs in the list and finds their best attribute
+
     try:
         while len(C) >= 1:
 
@@ -467,7 +529,7 @@ def find_clusters(spread: int, df: pd.DataFrame) -> dict:
     except KeyboardInterrupt:
         return_dict_state()
 
-    print("\n\n--- took " + str(time.time() - start_time) + " seconds ---")
+    calculate_time(start_time)
     halt = False
 
     return csv_dict
